@@ -65,7 +65,7 @@ async def api_info() -> dict[str, str]:
     }
 
 
-if STATIC_DIR.exists() and any(STATIC_DIR.iterdir()):
+if (STATIC_DIR / "index.html").exists():
     app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="frontend")
     logger.info("Serving frontend from %s", STATIC_DIR)
 else:
