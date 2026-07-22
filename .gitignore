@@ -19,10 +19,11 @@ backend/.venv/
 backend/uploads/*
 backend/outputs/*
 backend/weights/*
+backend/static/*
 !backend/uploads/.gitkeep
 !backend/outputs/.gitkeep
 !backend/weights/.gitkeep
-
+!backend/static/.gitkeep
 # Secrets & local env
 .env
 backend/.env

@@ -80,25 +80,17 @@ Weights (YuNet, Real-ESRGAN) download automatically into `backend/weights/` on f
 | `POST` | `/api/process` | Multipart `file` + `quality` (`auto` \| `original` \| `2` \| `4`) → SSE progress |
 | `GET` | `/api/download/{job_id}` | Download transparent PNG |
 
-## Production build (frontend)
+## Deploy
 
-```bat
-cd frontend
-npm install
-npm run build
+See **[DEPLOY.md](DEPLOY.md)** for Docker, Render, and VPS steps.
+
+Quick Docker:
+
+```bash
+docker compose up -d --build
 ```
 
-Serve `frontend/dist/` behind Nginx/Caddy and proxy `/api` to the FastAPI process (Uvicorn/Gunicorn).
-
-### Backend production example
-
-```bat
-cd backend
-.venv\Scripts\activate
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1
-```
-
-Use **1 worker** on 8GB RAM machines (models are memory-heavy). Prefer `quality=original` or `2` for clients on low-end PCs.
+Then open `http://YOUR_SERVER:8000`.
 
 ## Stack
 

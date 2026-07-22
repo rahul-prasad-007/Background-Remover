@@ -1,0 +1,27 @@
+# Render.com one-click style blueprint
+# Connect this GitHub repo in Render Dashboard → New → Blueprint
+# Requires a paid instance with ≥4–8 GB RAM (free tier will OOM on PyTorch).
+
+services:
+  - type: web
+    name: shankar-card-ai
+    runtime: docker
+    plan: standard  # change to a plan with enough RAM
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    envVars:
+      - key: BG_PROVIDER
+        value: local
+      - key: PERFORMANCE_PROFILE
+        value: low
+      - key: UNLOAD_MODELS_AFTER_USE
+        value: "true"
+      - key: SAFE_INPUT_SIDE
+        value: "1600"
+      - key: REALESRGAN_TILE
+        value: "128"
+      - key: CORS_ORIGINS
+        value: "*"
+      - key: REMOVE_BG_API_KEY
+        sync: false

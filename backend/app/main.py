@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.api import api_router
 from app.config import settings
@@ -14,6 +16,9 @@ logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+# backend/static is populated by Docker / production build
+STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 
 @asynccontextmanager
@@ -35,10 +40,13 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+origins = settings.cors_origin_list
+allow_credentials = origins != ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_credentials=True,
+    allow_origins=origins if origins != ["*"] else ["*"],
+    allow_credentials=allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -46,8 +54,8 @@ app.add_middleware(
 app.include_router(api_router)
 
 
-@app.get("/")
-async def root() -> dict[str, str]:
+@app.get("/api/info")
+async def api_info() -> dict[str, str]:
     return {
         "message": settings.app_name,
         "docs": "/docs",
@@ -55,3 +63,13 @@ async def root() -> dict[str, str]:
         "bg_engine": settings.bg_provider,
         "upscaler": "Real-ESRGAN",
     }
+
+
+if STATIC_DIR.exists() and any(STATIC_DIR.iterdir()):
+    app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="frontend")
+    logger.info("Serving frontend from %s", STATIC_DIR)
+else:
+
+    @app.get("/")
+    async def root() -> dict[str, str]:
+        return await api_info()

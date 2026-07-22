@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -16,17 +17,18 @@ class Settings(BaseSettings):
     upload_dir: Path = Path(__file__).resolve().parent.parent / "uploads"
     output_dir: Path = Path(__file__).resolve().parent.parent / "outputs"
     weights_dir: Path = Path(__file__).resolve().parent.parent / "weights"
-    cors_origins: list[str] = [
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ]
+
+    # Comma-separated, e.g. https://myapp.onrender.com,http://localhost:5173
+    cors_origins: str = Field(
+        default=(
+            "http://localhost:5173,http://127.0.0.1:5173,"
+            "http://localhost:3000,http://127.0.0.1:3000"
+        )
+    )
     device: str = "cpu"
 
     bg_provider: str = "local"
     birefnet_model: str = "birefnet-general-lite"
-    # Keep small for 8GB — quality restored by mask→original-color composite
     birefnet_max_side: int = 768
     birefnet_pad: int = 24
 
@@ -36,11 +38,10 @@ class Settings(BaseSettings):
     remove_bg_timeout: float = 120.0
     remove_bg_max_upload_side: int = 2500
 
-    # Cap EVERY image early so RAM spikes never happen
     safe_input_side: int = 1600
 
     realesrgan_scale: int = 2
-    realesrgan_tile: int = 128  # smaller tiles = less peak RAM
+    realesrgan_tile: int = 128
     realesrgan_threads: int = 2
     realesrgan_fast_4x: bool = True
     realesrgan_4x_max_input: int = 720
@@ -55,6 +56,10 @@ class Settings(BaseSettings):
     preload_models: bool = False
     use_gfpgan_model: bool = False
     unload_models_after_use: bool = True
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
 
     def apply_profile_defaults(self) -> None:
         if self.performance_profile.lower() == "quality":
