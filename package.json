@@ -1,0 +1,12 @@
+{
+  "name": "shankar-card-ai",
+  "private": true,
+  "description": "Shankar Card — AI Image Enhancer for print-ready cutouts",
+  "scripts": {
+    "dev": "npm run dev:frontend",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "dev:backend": "cd backend && .venv/Scripts/uvicorn app.main:app --reload --host 127.0.0.1 --port 8000",
+    "build": "npm --prefix frontend run build",
+    "preview": "npm --prefix frontend run preview"
+  }
+}

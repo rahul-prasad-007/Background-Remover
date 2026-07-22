@@ -1,0 +1,43 @@
+# Dependencies & build
+node_modules/
+frontend/node_modules/
+frontend/dist/
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+*.egg-info/
+
+# Python environments
+.venv/
+venv/
+env/
+backend/.venv/
+
+# Runtime (keep folder placeholders)
+backend/uploads/*
+backend/outputs/*
+backend/weights/*
+!backend/uploads/.gitkeep
+!backend/outputs/.gitkeep
+!backend/weights/.gitkeep
+
+# Secrets & local env
+.env
+backend/.env
+.env.local
+*.local
+
+# Model binaries (auto-downloaded on first run)
+*.pth
+*.onnx
+
+# Logs & OS
+*.log
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~
