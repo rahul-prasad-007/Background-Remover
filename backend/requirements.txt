@@ -5,6 +5,7 @@ aiofiles==24.1.0
 pillow>=11.1.0
 numpy>=2.2.2
 opencv-python-headless>=4.10.0.84
+# rembg pulls onnx/pymatting/etc. Works on Oracle Ampere (arm64) + x86_64
 rembg>=2.0.62
 onnxruntime>=1.20.1
 torch>=2.5.1

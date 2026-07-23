@@ -45,8 +45,8 @@ allow_credentials = origins != ["*"]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"] if origins == ["*"] else origins,
-    allow_credentials=False if origins == ["*"] else allow_credentials,
+    allow_origins=origins if origins != ["*"] else ["*"],
+    allow_credentials=allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )

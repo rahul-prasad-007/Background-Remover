@@ -26,7 +26,9 @@ def _validate_upload(file: UploadFile, size: int) -> None:
     if not file.filename:
         raise HTTPException(status_code=400, detail="Missing filename")
 
-    suffix = Path(file.filename).suffix.lower()
+    # Prevent path tricks in the original filename; we store by job_id only
+    name = Path(file.filename).name
+    suffix = Path(name).suffix.lower()
     if suffix not in settings.allowed_extensions:
         raise HTTPException(
             status_code=400,
@@ -39,6 +41,8 @@ def _validate_upload(file: UploadFile, size: int) -> None:
             status_code=400,
             detail=f"File exceeds {settings.max_file_size_mb} MB limit",
         )
+    if size < 32:
+        raise HTTPException(status_code=400, detail="File is empty or too small")
 
 
 @router.post("/process")
@@ -69,7 +73,9 @@ async def process_image(
         )
 
     job_id = uuid.uuid4().hex
-    suffix = Path(file.filename or "upload.png").suffix.lower() or ".png"
+    suffix = Path(Path(file.filename or "upload.png").name).suffix.lower() or ".png"
+    if suffix not in settings.allowed_extensions:
+        suffix = ".png"
     upload_path = settings.upload_dir / f"{job_id}{suffix}"
     output_path = settings.output_dir / f"{job_id}.png"
 
