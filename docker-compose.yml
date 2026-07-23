@@ -2,10 +2,12 @@ services:
   app:
     build: .
     ports:
-      - "8000:8000"
+      # Host 8000 → container PORT (7860) for local testing of the HF image
+      - "8000:7860"
     env_file:
       - backend/.env
     environment:
+      - PORT=7860
       - BG_PROVIDER=${BG_PROVIDER:-local}
       - PERFORMANCE_PROFILE=low
       - UNLOAD_MODELS_AFTER_USE=true
@@ -14,11 +16,12 @@ services:
       - app-uploads:/app/uploads
       - app-outputs:/app/outputs
       - app-weights:/app/weights
+      - app-u2net:/app/.u2net
     restart: unless-stopped
-    # AI models need RAM — raise if the host allows
     mem_limit: 6g
 
 volumes:
   app-uploads:
   app-outputs:
   app-weights:
+  app-u2net:

@@ -1,70 +1,37 @@
-# Deploy guide — Shankar Card AI Image Enhancer
+# Deploy guide
 
-Repo: https://github.com/rahul-prasad-007/Background-Remover
+## Hugging Face Spaces (recommended free path)
 
-## Option A — Docker on a VPS (recommended)
+Full click-by-click instructions are in the root **[README.md](README.md#hugging-face-spaces-deployment-free)**.
 
-Needs a Linux VPS with **≥6–8 GB RAM** (DigitalOcean, Hetzner, Lightsail, etc.).
+Summary:
+
+1. Push this repo to GitHub (`main`).
+2. Create a Space with **Docker** SDK at https://huggingface.co/new-space
+3. Link GitHub repo `rahul-prasad-007/Background-Remover`
+4. Wait for build → open the Space URL (port **7860** inside the container)
+
+## Docker Compose (VPS)
 
 ```bash
 git clone https://github.com/rahul-prasad-007/Background-Remover.git
 cd Background-Remover
 cp backend/.env.example backend/.env
-# edit backend/.env if needed
-
 docker compose up -d --build
 ```
 
-Open `http://YOUR_SERVER_IP:8000` — UI + API on the same port.
+Open `http://YOUR_SERVER_IP:8000` (compose maps 8000; Spaces uses 7860).
 
-Optional Nginx (SSL): copy `deploy/nginx.conf` and point it at port 8000, then add Certbot.
+> Note: `docker-compose.yml` still publishes host port **8000**.  
+> The image itself listens on **`$PORT` (default 7860)** for Hugging Face.
 
-## Option B — Render.com (connect GitHub)
+To run the HF image locally on 7860:
 
-1. Go to [https://dashboard.render.com](https://dashboard.render.com)
-2. **New → Blueprint** → select `Background-Remover`
-3. Use a plan with **≥4–8 GB RAM** (free tier will crash on PyTorch)
-4. Deploy — health check: `/api/health`
-
-`render.yaml` is already in the repo.
-
-## Option C — Split hosting
-
-| Part | Host | Notes |
-|---|---|---|
-| Frontend | Vercel / Netlify | Root = `frontend`, build = `npm run build`, output = `dist` |
-| Backend | Render / Railway / VPS | Docker or `uvicorn app.main:app` |
-
-Set frontend env:
-
-```
-VITE_API_URL=https://your-backend.example.com
+```bash
+docker build -t shankar-card-ai .
+docker run --rm -p 7860:7860 shankar-card-ai
 ```
 
-Set backend env:
+## Render.com
 
-```
-CORS_ORIGINS=https://your-frontend.vercel.app
-```
-
-## Local production-like test (no Docker)
-
-```bat
-cd frontend
-npm install
-npm run build
-xcopy /E /I dist ..\backend\static
-
-cd ..\backend
-.venv\Scripts\activate
-uvicorn app.main:app --host 127.0.0.1 --port 8000
-```
-
-Open http://127.0.0.1:8000
-
-## Important
-
-- First request downloads AI models (slow once).
-- Use **1 Uvicorn worker** only.
-- Prefer UI quality **Original** or **2×** on small servers.
-- Never commit `backend/.env` (secrets).
+Use `render.yaml` → Dashboard → New → Blueprint. Needs **≥4–8 GB RAM**.
