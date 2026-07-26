@@ -115,12 +115,11 @@ export default function App() {
       setPhase('error')
       const raw = err instanceof Error ? err.message : 'Something went wrong'
       const friendly =
-        /allocate memory|out of memory|oom|not enough ram|safe mode/i.test(raw)
-          ? 'PC was low on memory — close Chrome tabs/other apps and try again. The app will auto-shrink large photos.'
+        /allocate memory|out of memory|oom|not enough ram|ran out of memory/i.test(raw)
+          ? 'Server ran out of memory on the free plan. Try “Original” quality, or a smaller image, then Process again.'
           : /api key|REMOVE_BG/i.test(raw)
             ? 'remove.bg API key missing or invalid. Add REMOVE_BG_API_KEY in backend/.env'
-            : raw
-      setError(friendly)
+            : raw      setError(friendly)
     }
   }
 

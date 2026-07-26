@@ -107,11 +107,12 @@ class BiRefNetService:
         padded, pad = pad_for_cutout(original, pad=settings.birefnet_pad)
         fw, fh = padded.size
 
-        # Better → tinier fallbacks (u2netp last resort for free hosts)
-        models = [self.model_name]
-        for extra in ("u2net", "u2netp"):
-            if extra not in models:
-                models.append(extra)
+        # Free hosts: stick to configured model + tiny u2netp fallback only
+        # (u2net / BiRefNet-lite OOM-kill small Railway containers)
+        models: list[str] = []
+        for name in (self.model_name, "u2netp"):
+            if name not in models:
+                models.append(name)
 
         side_steps = [
             settings.birefnet_max_side,
