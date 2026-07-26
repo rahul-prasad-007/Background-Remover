@@ -101,70 +101,81 @@ def clear_white_and_gap_background(
 
 def refine_alpha_catalog(alpha: np.ndarray, rgb: np.ndarray) -> np.ndarray:
     """
-    Catalog-clean matte: smooth mask, then harden body while keeping soft hair tips.
-    Matches print cutouts (rhino / animals) — crisp silhouette, no mushy fringe.
+    Catalog-clean matte: kill soft white halos, harden body, keep a 1px AA edge.
     """
     a = alpha.astype(np.float32)
     guide = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
 
-    # Edge-aware smooth if available; else bilateral
     try:
         a = cv2.ximgproc.guidedFilter(
-            guide=guide, src=a.astype(np.uint8), radius=4, eps=50.0, dDepth=-1
+            guide=guide, src=a.astype(np.uint8), radius=3, eps=40.0, dDepth=-1
         ).astype(np.float32)
     except Exception:
-        a = cv2.bilateralFilter(a.astype(np.uint8), d=5, sigmaColor=40, sigmaSpace=40).astype(
+        a = cv2.bilateralFilter(a.astype(np.uint8), d=5, sigmaColor=35, sigmaSpace=35).astype(
             np.float32
         )
 
-    # Smoothstep harden: kill weak BG, keep strong FG solid
-    low, high = 28.0, 185.0
+    # Tighter harden — removes mushy fringe / light halo on black preview
+    low, high = 45.0, 165.0
     t = np.clip((a - low) / (high - low), 0.0, 1.0)
     t = t * t * (3.0 - 2.0 * t)
     a = t * 255.0
 
-    # Tiny morphological close on solid core (fills micro gaps on body only)
-    solid = (a >= 230).astype(np.uint8) * 255
+    # Shrink 1px of uncertain edge (classic white rim on dark BG)
+    solid = (a >= 220).astype(np.uint8) * 255
     k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
     solid = cv2.morphologyEx(solid, cv2.MORPH_CLOSE, k, iterations=1)
-    a = np.maximum(a, solid.astype(np.float32) * 0.98)
+    solid = cv2.erode(solid, k, iterations=1)
+    a = np.maximum(a * 0.35, solid.astype(np.float32))
 
-    # Anti-alias 1px on final silhouette
+    # Soft anti-alias after harden
     h, w = a.shape
     big = cv2.resize(a, (w * 2, h * 2), interpolation=cv2.INTER_LINEAR)
-    big = cv2.GaussianBlur(big, (0, 0), sigmaX=0.35)
+    big = cv2.GaussianBlur(big, (0, 0), sigmaX=0.4)
     a = cv2.resize(big, (w, h), interpolation=cv2.INTER_AREA)
     return np.clip(a, 0, 255).astype(np.uint8)
 
 
 def defringe_from_interior(rgb: np.ndarray, alpha: np.ndarray) -> np.ndarray:
     """
-    Remove grass / sky color spill on the cutout edge by pulling colors
-    from the opaque interior (catalog-style clean rim).
+    Remove grass / sky / white-rim spill on the cutout edge.
     """
     a = alpha.astype(np.float32) / 255.0
-    mask = (a >= 0.85).astype(np.float32)
+    mask = (a >= 0.88).astype(np.float32)
     if mask.sum() < 50:
         return rgb
 
     rgb_f = rgb.astype(np.float32)
-    ksize = 9
+    ksize = 11
     clean = np.empty_like(rgb_f)
     den = cv2.blur(mask, (ksize, ksize)) + 1e-5
     for c in range(3):
         clean[:, :, c] = cv2.blur(rgb_f[:, :, c] * mask, (ksize, ksize)) / den
 
-    # Fringe = present but not deep interior
-    present = (a > 0.08).astype(np.float32)
-    core = cv2.erode((a >= 0.92).astype(np.uint8) * 255, np.ones((5, 5), np.uint8), 1)
+    present = (a > 0.05).astype(np.float32)
+    core = cv2.erode((a >= 0.94).astype(np.uint8) * 255, np.ones((5, 5), np.uint8), 1)
     core_f = core.astype(np.float32) / 255.0
     fringe = np.clip(present - core_f, 0, 1)
-    fringe = cv2.GaussianBlur(fringe, (0, 0), sigmaX=0.8)
+    fringe = cv2.GaussianBlur(fringe, (0, 0), sigmaX=0.9)
 
-    # Stronger pull on high-chroma spill (green grass, blue sky)
     chroma = rgb_f.max(axis=2) - rgb_f.min(axis=2)
-    spill = np.clip((chroma - 25.0) / 60.0, 0.0, 1.0) * fringe
-    mix = np.clip(fringe * 0.65 + spill * 0.45, 0.0, 0.95)[:, :, None]
+    spill = np.clip((chroma - 18.0) / 50.0, 0.0, 1.0) * fringe
+
+    # Outdoor grass / foliage spill (green-dominant rim)
+    green = (
+        (rgb_f[:, :, 1] > rgb_f[:, :, 0] + 10)
+        & (rgb_f[:, :, 1] > rgb_f[:, :, 2] + 6)
+        & (fringe > 0.15)
+    ).astype(np.float32)
+
+    # Light halo on black boards (bright rim)
+    bright = (rgb_f.mean(axis=2) > 190).astype(np.float32) * fringe
+
+    mix = np.clip(
+        fringe * 0.72 + spill * 0.5 + green * 0.85 + bright * 0.9,
+        0.0,
+        0.97,
+    )[:, :, None]
 
     out = rgb_f * (1.0 - mix) + clean * mix
     out = np.clip(out, 0, 255).astype(np.uint8)
@@ -212,26 +223,31 @@ def remove_interior_white_specks(rgb: np.ndarray, alpha: np.ndarray) -> np.ndarr
 
 
 def enhance_subject_catalog(rgb: np.ndarray, alpha: np.ndarray) -> np.ndarray:
-    """Gentle clarity only — no CLAHE/vibrance (those caused white speckles + purple cast)."""
-    mask = (alpha.astype(np.float32) / 255.0)[:, :, None]
-    if mask.max() < 0.01:
+    """Clearer subject detail — interior unsharp + mild local contrast, no color cast."""
+    if (alpha.astype(np.float32) / 255.0).max() < 0.01:
         return rgb
 
     base = rgb.astype(np.float32)
 
-    # Very light unsharp on deep interior only
-    blur = cv2.GaussianBlur(base, (0, 0), sigmaX=0.85)
-    sharp = np.clip(base * 1.12 + blur * (1.0 - 1.12), 0, 255)
+    # Mild local contrast (LAB L only) — keeps skin folds readable
+    lab = cv2.cvtColor(np.clip(base, 0, 255).astype(np.uint8), cv2.COLOR_RGB2LAB)
+    l, ca, cb = cv2.split(lab)
+    clahe = cv2.createCLAHE(clipLimit=1.25, tileGridSize=(8, 8))
+    l2 = clahe.apply(l)
+    contrasted = cv2.cvtColor(cv2.merge([l2, ca, cb]), cv2.COLOR_LAB2RGB).astype(np.float32)
 
-    solid = (alpha >= 210).astype(np.uint8) * 255
-    k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+    blur = cv2.GaussianBlur(contrasted, (0, 0), sigmaX=0.75)
+    sharp = np.clip(contrasted * 1.18 + blur * (1.0 - 1.18), 0, 255)
+
+    solid = (alpha >= 205).astype(np.uint8) * 255
+    k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
     core = cv2.erode(solid, k, iterations=2).astype(np.float32) / 255.0
-    core = cv2.GaussianBlur(core, (0, 0), sigmaX=1.4)[:, :, None]
+    core = cv2.GaussianBlur(core, (0, 0), sigmaX=1.1)[:, :, None]
 
-    out = base * (1.0 - core * 0.75) + sharp * (core * 0.75)
+    out = base * (1.0 - core * 0.88) + sharp * (core * 0.88)
     out = np.clip(out, 0, 255).astype(np.uint8)
     out = remove_interior_white_specks(out, alpha)
-    out[alpha < 2] = 0  # black under transparency — no white flash on dark preview
+    out[alpha < 2] = 0
     return out
 
 
@@ -262,7 +278,10 @@ def apply_mask_keep_original_colors(
     cut = ensure_rgba(mask_source)
     alpha = np.array(cut.split()[-1])
     if alpha.shape[1] != orig.size[0] or alpha.shape[0] != orig.size[1]:
-        alpha = cv2.resize(alpha, orig.size, interpolation=cv2.INTER_LINEAR)
+        # Upsample mask with Lanczos for cleaner edges on full-res original
+        alpha = np.array(
+            Image.fromarray(alpha).resize(orig.size, Image.Resampling.LANCZOS)
+        )
 
     alpha = fill_tiny_pinholes(alpha, max_hole_area=64)
     rgb = np.array(orig.convert("RGB"))
