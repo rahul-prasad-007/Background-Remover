@@ -48,6 +48,10 @@ npm run dev
 
 Open **http://localhost:5173** (Vite proxies `/api` → `:8000`).
 
+## Live demo
+
+**https://background-remover-production-6c91.up.railway.app**
+
 ## Production on Oracle Cloud Always Free
 
 Full guide: **[DEPLOY_ORACLE.md](DEPLOY_ORACLE.md)**
