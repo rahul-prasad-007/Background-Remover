@@ -177,6 +177,20 @@ class RealESRGANService:
         rgba = ensure_rgba(image)
         w0, h0 = rgba.size
 
+        def _lanczos(msg: str) -> Image.Image:
+            if on_status:
+                on_status(msg)
+            target = (w0 * scale, h0 * scale)
+            max_side = settings.max_output_side
+            if max(target) > max_side:
+                s = max_side / float(max(target))
+                target = (max(1, int(target[0] * s)), max(1, int(target[1] * s)))
+            return rgba.resize(target, Image.Resampling.LANCZOS)
+
+        # Free-tier / low-RAM hosts: skip heavy torch ESRGAN
+        if not settings.use_torch_realesrgan:
+            return _lanczos(f"Fast Lanczos ×{scale} (low-RAM mode)…")
+
         # Progressive max sides — shrink automatically on OOM
         if scale == 4:
             candidates = [
@@ -265,14 +279,7 @@ class RealESRGANService:
 
         # Never fail the job — Lanczos always works
         logger.warning("ESRGAN exhausted retries (%s) — Lanczos fallback", last_error)
-        if on_status:
-            on_status("Using fast Lanczos upscale (safe mode)…")
-        target = (w0 * scale, h0 * scale)
-        max_side = settings.max_output_side
-        if max(target) > max_side:
-            s = max_side / float(max(target))
-            target = (max(1, int(target[0] * s)), max(1, int(target[1] * s)))
-        return rgba.resize(target, Image.Resampling.LANCZOS)
+        return _lanczos("Using fast Lanczos upscale (safe mode)…")
 
 
 @lru_cache(maxsize=1)

@@ -107,9 +107,9 @@ class BiRefNetService:
         padded, pad = pad_for_cutout(original, pad=settings.birefnet_pad)
         fw, fh = padded.size
 
-        # Prefer lite → tiny. Always end with u2netp at tiny size.
+        # Prefer configured model, then tiny fallbacks (u2netp first on free hosts)
         models = [self.model_name]
-        for extra in ("birefnet-general-lite", "u2netp"):
+        for extra in ("u2netp", "birefnet-general-lite"):
             if extra not in models:
                 models.append(extra)
 

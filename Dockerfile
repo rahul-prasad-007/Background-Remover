@@ -1,6 +1,5 @@
 # syntax=docker/dockerfile:1
-# Single container for Railway / Render / any Docker host
-# Serves React UI + FastAPI API (same origin)
+# Railway / Render free deploy — CPU-only torch, tiny rembg model by default
 
 FROM node:22-bookworm-slim AS frontend
 WORKDIR /web
@@ -24,22 +23,23 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     MALLOC_ARENA_MAX=2 \
     TOKENIZERS_PARALLELISM=false \
     BG_PROVIDER=local \
-    BIREFNET_MODEL=birefnet-general-lite \
-    BIREFNET_MAX_SIDE=640 \
-    SAFE_INPUT_SIDE=1280 \
-    MAX_PROCESS_SIDE=900 \
-    MAX_OUTPUT_SIDE=2400 \
-    REALESRGAN_TILE=96 \
+    BIREFNET_MODEL=u2netp \
+    BIREFNET_MAX_SIDE=512 \
+    BIREFNET_PAD=16 \
+    SAFE_INPUT_SIDE=1024 \
+    MAX_PROCESS_SIDE=800 \
+    MAX_OUTPUT_SIDE=2000 \
+    REALESRGAN_TILE=64 \
     REALESRGAN_FAST_4X=true \
-    REALESRGAN_2X_MAX_INPUT=800 \
-    REALESRGAN_4X_MAX_INPUT=560 \
+    REALESRGAN_2X_MAX_INPUT=640 \
+    REALESRGAN_4X_MAX_INPUT=480 \
     PERFORMANCE_PROFILE=low \
     DEVICE=cpu \
-    USE_TORCH_REALESRGAN=true \
+    USE_TORCH_REALESRGAN=false \
     USE_GFPGAN_MODEL=false \
     UNLOAD_MODELS_AFTER_USE=true \
     CORS_ORIGINS=* \
-    MAX_FILE_SIZE_MB=12
+    MAX_FILE_SIZE_MB=10
 
 WORKDIR /app
 
@@ -52,8 +52,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY backend/requirements.txt .
+# Force CPU PyTorch — default pip CUDA wheels OOMed free Railway
 RUN pip install --upgrade pip \
-    && pip install -r requirements.txt
+    && pip install -r requirements.txt \
+    && pip install --force-reinstall torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
 COPY backend/app ./app
 RUN mkdir -p uploads outputs weights static

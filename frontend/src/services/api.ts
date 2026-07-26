@@ -34,6 +34,19 @@ export const PIPELINE_STEPS: { key: StageKey; label: string }[] = [
 
 const API_BASE = import.meta.env.VITE_API_URL ?? ''
 
+function parseSseChunk(chunk: string): ProgressEvent | null {
+  const line = chunk
+    .split('\n')
+    .map((l) => l.trim())
+    .find((l) => l.startsWith('data:'))
+  if (!line) return null
+  try {
+    return JSON.parse(line.slice(5).trim()) as ProgressEvent
+  } catch {
+    return null
+  }
+}
+
 export async function processImage(
   file: File,
   onProgress: (event: ProgressEvent) => void,
@@ -70,6 +83,21 @@ export async function processImage(
   let buffer = ''
   let downloadUrl = ''
   let jobId = ''
+  let lastStage = ''
+
+  const handleEvent = (payload: ProgressEvent) => {
+    onProgress(payload)
+    lastStage = payload.stage
+    if (payload.stage === 'error') {
+      throw new Error(payload.message || 'Pipeline error')
+    }
+    if (payload.download_url) {
+      downloadUrl = `${API_BASE}${payload.download_url}`
+    }
+    if (payload.job_id) {
+      jobId = payload.job_id
+    }
+  }
 
   while (true) {
     const { done, value } = await reader.read()
@@ -80,30 +108,37 @@ export async function processImage(
     buffer = chunks.pop() ?? ''
 
     for (const chunk of chunks) {
-      const line = chunk
-        .split('\n')
-        .map((l) => l.trim())
-        .find((l) => l.startsWith('data:'))
-      if (!line) continue
+      const payload = parseSseChunk(chunk)
+      if (payload) handleEvent(payload)
+    }
+  }
 
-      const payload = JSON.parse(line.slice(5).trim()) as ProgressEvent
-      onProgress(payload)
+  // Flush trailing SSE frame (no final \n\n)
+  if (buffer.trim()) {
+    const payload = parseSseChunk(buffer)
+    if (payload) handleEvent(payload)
+  }
 
-      if (payload.stage === 'error') {
-        throw new Error(payload.message || 'Pipeline error')
-      }
-
-      if (payload.download_url) {
-        downloadUrl = `${API_BASE}${payload.download_url}`
-      }
-      if (payload.job_id) {
-        jobId = payload.job_id
-      }
+  if (!downloadUrl && jobId) {
+    // Stream dropped (e.g. host OOM restart) — try download if file was written
+    const guess = `${API_BASE}/api/download/${jobId}`
+    try {
+      const probe = await fetch(guess, { method: 'HEAD', signal })
+      if (probe.ok) downloadUrl = guess
+    } catch {
+      /* ignore */
     }
   }
 
   if (!downloadUrl) {
-    throw new Error('Processing finished without a download URL')
+    if (lastStage === 'removing_background' || lastStage === 'enhancing_image') {
+      throw new Error(
+        'Server ran out of memory while processing. Try “Original” quality or a smaller image.',
+      )
+    }
+    throw new Error(
+      'Processing finished without a result. Try again with Original quality or a smaller photo.',
+    )
   }
 
   return { downloadUrl, jobId }
